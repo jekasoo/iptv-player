@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Каналы — IPTV</title>
+<script>
+  try{
+    if (localStorage.getItem('iptv_theme') === 'light') document.documentElement.classList.add('light');
+  }catch(e){}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <style>
   :root{
@@ -20,6 +25,18 @@
     --red:#FF453A;
     --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   }
+  html.light{
+    --bg:#F2F2F7;
+    --cell:#FFFFFF;
+    --cell-2:#E5E5EA;
+    --sep: rgba(60,60,67,0.29);
+    --label:#000000;
+    --label-2: rgba(60,60,67,0.6);
+    --label-3: rgba(60,60,67,0.3);
+    --blue:#007AFF;
+  }
+  html.light .sheet{ background:#FFFFFF; }
+  html.light .backdrop{ background:rgba(0,0,0,0.35); }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
   html,body{height:100%;}
   body{
@@ -45,7 +62,35 @@
   }
   .navbar{ padding:14px 16px 10px; flex-shrink:0; }
   .navbar-row{ display:flex; align-items:center; justify-content:space-between; }
+  .navbar-title-row{
+    display:flex;
+    align-items:center;
+    gap:9px;
+  }
+  .brand-logo{
+    width:30px; height:30px;
+    flex-shrink:0;
+    color:var(--blue);
+  }
   .navbar-title{ font-size:28px; font-weight:700; letter-spacing:-0.4px; }
+  .navbar-actions{ display:flex; align-items:center; gap:8px; }
+  .theme-toggle{
+    width:32px;height:32px;
+    border-radius:50%;
+    background:var(--cell);
+    border:none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    color:var(--label);
+  }
+  .theme-toggle:active{background:var(--cell-2);}
+  .theme-toggle svg{width:17px;height:17px;}
+  .theme-toggle .icon-sun{display:none;}
+  html.light .theme-toggle .icon-moon{display:none;}
+  html.light .theme-toggle .icon-sun{display:block;}
   .add-btn{
     width:32px;height:32px; border-radius:50%; background:var(--cell);
     border:none; color:var(--blue); font-size:18px; font-weight:600;
@@ -144,7 +189,7 @@
   }
   .backdrop.show{display:flex;}
   .sheet{
-    background:#1C1C1E; width:100%; max-width:480px; border-radius:20px 20px 0 0;
+    background:var(--cell); width:100%; max-width:480px; border-radius:20px 20px 0 0;
     padding:10px 20px 28px; transform:translateY(100%);
     transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);
   }
@@ -211,8 +256,22 @@
   <div class="pane-list">
     <div class="navbar">
       <div class="navbar-row">
-        <div class="navbar-title">Каналы</div>
-        <button class="add-btn" id="openSheetBtn">+</button>
+        <div class="navbar-title-row">
+          <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="2.5" y="6.5" width="19" height="13" rx="2.3"/>
+            <path d="M8 3.5 12 6.5 16 3.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="8" y1="19.5" x2="16" y2="19.5" stroke-linecap="round"/>
+            <circle cx="17.3" cy="10" r="0.9" fill="currentColor" stroke="none"/>
+          </svg>
+          <div class="navbar-title">Каналы</div>
+        </div>
+        <div class="navbar-actions">
+          <button class="theme-toggle" id="themeToggle" title="Сменить тему">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="1.5" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22.5"/><line x1="4" y1="12" x2="1.5" y2="12"/><line x1="22.5" y1="12" x2="20" y2="12"/><line x1="5.6" y1="5.6" x2="4" y2="4"/><line x1="20" y1="20" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="20" y2="4"/><line x1="4" y1="20" x2="5.6" y2="18.4"/></svg>
+          </button>
+          <button class="add-btn" id="openSheetBtn">+</button>
+        </div>
       </div>
       <div class="search-bar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -299,6 +358,7 @@ const els = {
   cancelBtn: document.getElementById('cancelBtn'),
   openSheetBtn: document.getElementById('openSheetBtn'),
   emptyAddBtn: document.getElementById('emptyAddBtn'),
+  themeToggle: document.getElementById('themeToggle'),
 };
 
 let channels = [];
@@ -431,6 +491,22 @@ function parseM3U(text){
   return result;
 }
 
+// Автоопределение спортивных каналов по названию/группе — не зависит от
+// того, как категория названа в исходном плейлисте.
+const SPORT_KEYWORDS = [
+  'матч', 'match tv', 'match!', 'спорт', 'sport', 'футбол', 'football',
+  'хоккей', 'hockey', 'баскетбол', 'basketball', 'теннис', 'tennis',
+  'бокс', 'boxing', 'formula', 'формула 1', 'формула-1', 'setanta',
+  'eurosport', 'viasat sport', 'ufc', 'mma', 'нба', ' nba', 'кхл', 'khl',
+  'рпл', 'рфпл', 'бой', 'fight', 'киберспорт', 'esport', 'зенит тв',
+  'спартак тв', 'okko спорт', 'okko sport'
+];
+
+function isSportChannel(c){
+  const t = (c.name + ' ' + c.group).toLowerCase();
+  return SPORT_KEYWORDS.some(k => t.includes(k));
+}
+
 function getGroups(){
   const set = new Set();
   channels.forEach(c => set.add(c.group));
@@ -440,9 +516,11 @@ function getGroups(){
 function renderChips(){
   const groups = getGroups();
   const favCount = channels.filter(c => favorites.has(c.id)).length;
+  const sportCount = channels.filter(isSportChannel).length;
   let html = `
     <button class="chip ${activeChip==='all'?'active':''}" data-chip="all">Все <span class="chip-count">${channels.length}</span></button>
     <button class="chip ${activeChip==='fav'?'active':''}" data-chip="fav">★ Избранное <span class="chip-count">${favCount}</span></button>
+    <button class="chip ${activeChip==='sport'?'active':''}" data-chip="sport">🏆 Спорт <span class="chip-count">${sportCount}</span></button>
   `;
   groups.forEach(g => {
     const count = channels.filter(c => c.group === g).length;
@@ -461,6 +539,7 @@ function renderChips(){
 function filteredChannels(){
   let list = channels;
   if (activeChip === 'fav') list = list.filter(c => favorites.has(c.id));
+  else if (activeChip === 'sport') list = list.filter(isSportChannel);
   else if (activeChip !== 'all') list = list.filter(c => c.group === activeChip);
   if (searchTerm){
     const t = searchTerm.toLowerCase();
@@ -494,7 +573,7 @@ function renderList(){
   }
 
   let html = '';
-  if (activeChip === 'all' || activeChip === 'fav'){
+  if (activeChip === 'all' || activeChip === 'fav' || activeChip === 'sport'){
     const byGroup = {};
     list.forEach(c => {
       if (!byGroup[c.group]) byGroup[c.group] = [];
@@ -719,6 +798,25 @@ els.fileDrop.addEventListener('drop', (e) => {
   }
 });
 
+function loadTheme(){
+  if (!storage) return 'dark';
+  try{ return storage.getItem('iptv_theme') || 'dark'; }catch(e){ return 'dark'; }
+}
+function saveTheme(t){
+  if (!storage) return;
+  try{ storage.setItem('iptv_theme', t); }catch(e){}
+}
+function applyTheme(t){
+  document.documentElement.classList.toggle('light', t === 'light');
+}
+
+els.themeToggle.addEventListener('click', () => {
+  const next = document.documentElement.classList.contains('light') ? 'dark' : 'light';
+  applyTheme(next);
+  saveTheme(next);
+});
+
+applyTheme(loadTheme());
 loadFavorites();
 renderChips();
 renderList();
