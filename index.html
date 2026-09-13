@@ -395,57 +395,37 @@ function saveLastUrl(u){
   if (!storage) return;
   try{ storage.setItem('iptv_last_url', u); }catch(e){}
 }
+// Прокси по умолчанию — можно заменить своим в поле «Прокси» в окне загрузки,
+// выбор пользователя сохранится и будет иметь приоритет над этим значением.
+const DEFAULT_PROXY_URL = 'https://solitary-water-e69b.sinyakovskii19.workers.dev/?url=';
+
 function loadProxyUrl(){
-  if (!storage) return '';
-  try{ return storage.getItem('iptv_proxy_url') || ''; }catch(e){ return ''; }
+  if (!storage) return DEFAULT_PROXY_URL;
+  try{
+    const saved = storage.getItem('iptv_proxy_url');
+    return (saved !== null) ? saved : DEFAULT_PROXY_URL;
+  }catch(e){ return DEFAULT_PROXY_URL; }
 }
 function saveProxyUrl(u){
   if (!storage) return;
   try{ storage.setItem('iptv_proxy_url', u); }catch(e){}
 }
 
-// Custom hls.js loader that routes http:// requests (playlists + segments)
-// through a user-supplied https proxy, so browsers won't block them as
-// mixed content on an https page. Falls back to a normal fetch otherwise.
-function makeProxyLoader(proxyBase){
-  return class ProxyLoader{
-    constructor(config){ this.config = config; this.aborted = false; }
-    destroy(){}
-    abort(){ this.aborted = true; }
-    load(context, config, callbacks){
-      const isHttp = /^http:\/\//i.test(context.url);
-      const fetchUrl = (isHttp && proxyBase)
-        ? proxyBase + encodeURIComponent(context.url)
-        : context.url;
-      const start = performance.now();
-      const stats = {
-        aborted: false, loaded: 0, total: 0,
-        loading: { start, first: 0, end: 0 },
-        parsing: { start: 0, end: 0 },
-        buffering: { start: 0, first: 0, end: 0 },
-        retry: 0
-      };
-      this.stats = stats;
-      fetch(fetchUrl)
-        .then(resp => {
-          if (this.aborted) return null;
-          if (!resp.ok) throw new Error('HTTP ' + resp.status);
-          stats.loading.first = performance.now();
-          return context.responseType === 'arraybuffer' ? resp.arrayBuffer() : resp.text();
-        })
-        .then(data => {
-          if (this.aborted || data === null) return;
-          stats.loading.end = performance.now();
-          stats.total = stats.loaded = (data.byteLength || data.length || 0);
-          callbacks.onSuccess({ url: context.url, data: data }, stats, context, null);
-        })
-        .catch(err => {
-          if (this.aborted) return;
-          if (callbacks.onError) callbacks.onError({ code: 0, text: err.message }, context, null, stats);
-        });
-    }
+// Прозрачно перенаправляем http:// запросы hls.js через прокси, не трогая
+// логику самой библиотеки (важно: правки на уровне XHR-транспорта, а не
+// собственный Loader — так ABR-контроллер и стата hls.js работают штатно).
+(function(){
+  const originalOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest){
+    try{
+      const proxyBase = loadProxyUrl();
+      if (proxyBase && /^http:\/\//i.test(url)){
+        url = proxyBase + encodeURIComponent(url);
+      }
+    }catch(e){}
+    return originalOpen.call(this, method, url, ...rest);
   };
-}
+})();
 
 function svgHeart(filled){
   return `<svg viewBox="0 0 24 24" fill="${filled ? 'var(--red)' : 'none'}" stroke="${filled ? 'var(--red)' : 'currentColor'}" stroke-width="2">
@@ -660,9 +640,7 @@ function playChannel(chan){
   const isM3U8 = /\.m3u8($|\?)/i.test(chan.url);
 
   if (isM3U8 && window.Hls && Hls.isSupported()){
-    const proxyBase = loadProxyUrl();
-    const hlsConfig = proxyBase ? { loader: makeProxyLoader(proxyBase) } : {};
-    hls = new Hls(hlsConfig);
+    hls = new Hls();
     hls.loadSource(chan.url);
     hls.attachMedia(els.video);
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
